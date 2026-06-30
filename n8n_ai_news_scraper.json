@@ -1,0 +1,669 @@
+{
+  "name": "Scraping - News",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1072,
+        -352
+      ],
+      "id": "e8022acc-c36d-44bf-820f-eda0c4009300",
+      "name": "Obtener sitios de noticias"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b0e9bdb9-67ac-4e21-9d86-abb50321ebad",
+              "leftValue": "={{ $json.Url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "bf5cec16-f185-4fc5-a6b0-f2c0e9bd4459",
+              "leftValue": "={{ $json.Url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -592,
+        -240
+      ],
+      "id": "3425dd89-aadf-44f8-9efb-834e7810b121",
+      "name": "Validar URL"
+    },
+    {
+      "parameters": {
+        "content": "📂 FASE 1: Extracción y Validación de Orígenes\nDescripción: Este bloque se encarga de leer la base de datos de configuración con los portales de noticias objetivo y filtrar cualquier registro inválido o vacío para proteger la estabilidad del flujo.\nInputs: Google Sheets (urls_config)\nOutputs: Listado de URLs válidas listas para procesar (3 items).",
+        "height": 496,
+        "width": 704
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1152,
+        -480
+      ],
+      "typeVersion": 1,
+      "id": "e6710995-ad19-4235-aec0-2f37c5144825",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.Url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -384,
+        -240
+      ],
+      "id": "8d7fb039-b208-4d75-891c-4a842cb964b5",
+      "name": "Extraer Noticias de URLs",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Palabras clave para el filtrado temático strico\nconst palabrasClave = [\n  'guerra', 'conflicto', 'elecciones', 'tratado', 'sanciones', 'cumbre', 'alianza', 'otan',\n  'ia', 'inteligencia artificial', 'software', 'ciberseguridad', 'chips', 'tecnología', 'tech',\n  'mercado', 'inflación', 'tasas', 'banco', 'acciones', 'petróleo', 'dólar', 'economía', 'finanzas', 'euro'\n];\n\nconst todosLosItems = $input.all();\nconst conteoFuentes = {};\nconst noticiasFiltradas = [];\n\nfor (const item of todosLosItems) {\n  const titulo = (item.json.title || '').toLowerCase();\n  const contenido = (item.json.content || item.json.contentSnippet || item.json.summary || '').toLowerCase();\n  \n  // Extraemos el dominio base para identificar la fuente de forma limpia\n  const urlRaw = item.json.link ? item.json.link.toLowerCase() : '';\n  let fuente = 'Desconocido';\n\n  if (urlRaw.includes('bbc')) {\n    fuente = 'BBC';\n  } else if (urlRaw.includes('elmundo')) {\n    fuente = 'El Mundo';\n  }\n\n  // Control estricto de cuota: Máximo 6 artículos por medio oficial\n  if (conteoFuentes[fuente] >= 6) continue;\n\n  // Validación de relevancia por palabras clave\n  const esRelevante = palabrasClave.some(palabra => titulo.includes(palabra) || contenido.includes(palabra));\n\n  if (esRelevante) {\n    if (!conteoFuentes[fuente]) conteoFuentes[fuente] = 0;\n    \n    conteoFuentes[fuente]++;\n    noticiasFiltradas.push(`- Título: ${item.json.title}\\n  Fuente: ${fuente}\\n  Link: ${item.json.link}`);\n  }\n}\n\n// Consolidación de salida en formato String plano optimizado para LLMs\nconst listaFinalTexto = noticiasFiltradas.join('\\n\\n');\n\nreturn [{ json: { listaNoticias: listaFinalTexto, totalProcesadas: noticiasFiltradas.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -384
+      ],
+      "id": "993e5b3f-eeca-4096-8f7d-0dca3be1e99e",
+      "name": "Formatear y Filtrar Noticias"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Obtenemos el texto que generó la IA con la ruta directa del item\nconst textoGemini = $input.item.json.output[0].content[0].text;\n\n// 2. Lo convertimos en objeto JSON\nconst reporteLimpio = JSON.parse(textoGemini);\nconst filasParaGoogleSheets = [];\n\n// 3. Recorremos las categorías\nfor (let seccion of reporteLimpio.sections) {\n    \n    // Recorremos CADA noticia/análisis individual dentro de esa categoría\n    if (seccion.analysis && seccion.analysis.length > 0) {\n        for (let bloqueAnalisis of seccion.analysis) {\n            \n            const resumenTexto = bloqueAnalisis.summary;\n            \n            // Extraemos el link único de forma limpia y sin espacios fantasmas\n            let linkUnico = \"\";\n            if (bloqueAnalisis.sources && bloqueAnalisis.sources.length > 0) {\n                linkUnico = bloqueAnalisis.sources[0].link.trim();\n            }\n\n            // 4. Creamos la fila perfecta e independiente\n            filasParaGoogleSheets.push({\n                json: {\n                    categoria: seccion.category,\n                    resumen: resumenTexto,\n                    fuentes: linkUnico\n                }\n            });\n        }\n    }\n}\n\n// Devolvemos los datos listos para Google Sheets\nreturn filasParaGoogleSheets;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -384
+      ],
+      "id": "892e277d-2314-46ed-aa2d-f927a6ec539d",
+      "name": "Parsear Reporte de IA"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI",
+          "mode": "list",
+          "cachedResultName": "Scraping News",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1234777605,
+          "mode": "list",
+          "cachedResultName": "Reporte_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI/edit#gid=1234777605"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Categoria": "={{ $json.categoria }}",
+            "Resumen": "={{ $json.resumen }}",
+            "Fuentes": "={{ $json.fuentes }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Categoria",
+              "displayName": "Categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Resumen",
+              "displayName": "Resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fuentes",
+              "displayName": "Fuentes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        816,
+        -384
+      ],
+      "id": "d027fd4d-571d-4c04-a1aa-631b5da3138c",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "EqTFDE5FhfXYHjbL",
+          "name": "Google Sheets marco.a.m.s.84@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI",
+          "mode": "list",
+          "cachedResultName": "Scraping News",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1234777605,
+          "mode": "list",
+          "cachedResultName": "Reporte_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI/edit#gid=1234777605"
+        },
+        "clear": "specificRange",
+        "range": "A2:C"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        608,
+        -384
+      ],
+      "id": "6d7d9b1a-5010-4249-a70d-a87603bcffcd",
+      "name": "Clear sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "EqTFDE5FhfXYHjbL",
+          "name": "Google Sheets marco.a.m.s.84@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "🔍 SUBFASE 1B: FILTRADO Y EXTRACCIÓN DE TEXTO CRUDO\n- Operación: Procesamiento y filtrado de URLs de noticias recopiladas.\n- Objetivo: Limpiar metadatos, estructurar el payload de texto y consolidar la información antes de enviarla al modelo de IA.",
+        "height": 496,
+        "width": 1376,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -432,
+        -480
+      ],
+      "typeVersion": 1,
+      "id": "37cc092c-1361-4243-a7dd-bcb9d0511b14",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "operation": "scrape",
+        "url": "={{ $json.Fuentes }}",
+        "requestOptions": {}
+      },
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        -384
+      ],
+      "id": "0789139d-288b-4950-9e49-2bb622058c4a",
+      "name": "Extraer Contenido Completo (Firecrawl)",
+      "retryOnFail": true,
+      "credentials": {
+        "firecrawlApi": {
+          "id": "3dwybMOToKOK4w22",
+          "name": "Firecrawl account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Inicializamos la variable para acumular el texto\nlet texto_final = \"\";\n\n// 1. Obtenemos todos los items de entrada de forma moderna\nconst items = $input.all();\n\n// 2. Recorremos cada uno de los reportes que vienen de la IA\nfor (let i = 0; i < items.length; i++) {\n    // Extraemos el texto limpio usando la ruta exacta de la nueva interfaz\n    let noticia = items[i].json.output[0].content[0].text;\n    \n    // Lo suma al reporte final separando cada noticia con una línea\n    texto_final += noticia + \"\\n\\n===================================\\n\\n\";\n}\n\n// 3. Devolvemos un solo bloque de texto consolidado\nreturn [{\n    json: {\n        reporte_completo: texto_final\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -384
+      ],
+      "id": "bdf96652-7fc6-43c9-9125-f11280b13afb",
+      "name": "Unificar Reporte (Consolidador)"
+    },
+    {
+      "parameters": {
+        "content": "SUBFASE 2: PROCESAMIENTO CON IA Y EXPORTACIÓN FINAL\nOperación: Scraping profundo del contenido de las URLs, limpieza de formato web mediante Inteligencia Artificial y consolidación de datos.\nObjetivo: Transformar el texto crudo en un reporte estructurado y de fácil lectura, guardándolo automáticamente en el documento maestro de Google Docs.",
+        "height": 496,
+        "width": 1392,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        976,
+        -480
+      ],
+      "typeVersion": 1,
+      "id": "e48b2424-1317-4b2c-8e2a-9cc6dc536bbc",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Actúa como un editor de noticias profesional. Tu único trabajo es limpiar, resumir y estructurar el siguiente texto crudo (lleno de HTML/Markdown) para que se lea perfecto en un reporte de TEXTO PLANO.\n\nAplica ESTRICTAMENTE estas reglas:\n1. PROHIBIDO EL MARKDOWN: Elimina por completo cualquier asterisco (*), almohadilla (#), corchete ([]), paréntesis de enlaces (()) o etiquetas de código. No dejes rastros de formato web.\n2. TÍTULO PRINCIPAL: Identifica el título de la noticia y escríbelo TODO EN MAYÚSCULAS SOSTENIDAS.\n3. DATOS CLAVE: Inmediatamente debajo del título, coloca el autor, fuente y fecha (si están disponibles) usando un guion simple. Ejemplo: \"- Fuente: BBC | Autor: John Doe\".\n4. LIMPIEZA DE BASURA: Elimina frases inservibles como \"Tiempo de lectura\", \"Pie de foto\", \"Compartir artículo\", \"Suscríbete\" o textos sueltos de imágenes.\n5. CUERPO DE LA NOTICIA: Deja solo el texto real de la noticia. Asegúrate de que haya un (1) salto de línea claro entre cada párrafo para que el texto respire.\n\nNo agregues saludos, introducciones ni despedidas tuyas. Devuelve ÚNICAMENTE la noticia limpia.\n\nAquí está el texto a procesar: {{ $json.data.markdown }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -384
+      ],
+      "id": "067daee0-8d45-494b-805c-4db47d64317c",
+      "name": "Procesar Contenido Web (OpenAI)",
+      "credentials": {
+        "openAiApi": {
+          "id": "lb5kSWPlT0FJxdrS",
+          "name": "marco.a.m.s.84@gmail.com Openia"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('Unificar Reporte (Consolidador)').item.json.reporte_completo }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        2192,
+        -384
+      ],
+      "id": "86ee0804-7e86-4d15-ba3e-3dbc1acc9d24",
+      "name": "Añadir Reporte Final a Doc",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "m5e6wQMXrPime1ss",
+          "name": "Google Docs marco.a.m.s.84@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "folderId": "1M2ffk4h2cxGN7NBnnfTwSZ8kjZ6acEBO",
+        "title": "={{ $now.format('yyyy-MM-dd HH:mm') }} - Scraping News"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1984,
+        -384
+      ],
+      "id": "109910d4-8374-43ec-8b17-8471ed563a7d",
+      "name": "Crear Documento de Reporte",
+      "executeOnce": false,
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "m5e6wQMXrPime1ss",
+          "name": "Google Docs marco.a.m.s.84@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI",
+          "mode": "list",
+          "cachedResultName": "Scraping News",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "urls_config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/14fgZXkwZ0t-lnFgJqCTOTtM29UU0VWTHEHlLC-0oGaI/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -800,
+        -240
+      ],
+      "id": "d8e7fadd-a643-4311-a413-3f838c3b85a9",
+      "name": "Leer URLs de Configuración",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "EqTFDE5FhfXYHjbL",
+          "name": "Google Sheets marco.a.m.s.84@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1072,
+        -128
+      ],
+      "id": "b9067774-905c-4a44-a733-8d2b40e30823",
+      "name": "Gatillar Workflow"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Actúa como un Analista de Inteligencia Geopolítica y Tecnológica Senior. Tu tarea es procesar el siguiente listado de noticias filtradas y generar un reporte ejecutivo estructurado de forma estrictamente individual.\n\nInstrucciones de formato:\n1. Divide el reporte en categorías lógicas (ej: Geopolítica Mundial, Política Regional y Nacional, Tecnología y Defensa, Asuntos Sociales y Otros).\n2. Procesa cada noticia de manera ÚNICA e INDEPENDIENTE. Está estrictamente prohibido unificar, consolidar o mezclar noticias diferentes en un solo análisis, incluso si hablan del mismo tema.\n3. Para cada noticia individual del listado, debes generar un elemento independiente con su propio resumen analítico exclusivo y su enlace original correspondiente en el campo 'link'.\n4. Usa un tono corporativo, profesional, directo y conciso.\n\nIMPORTANTE: Debes responder única y exclusivamente con un objeto JSON válido, respetando la estructura del siguiente esquema de ejemplo:\n\n{\n  \"sections\": [\n    {\n      \"category\": \"Nombre de la Categoría\",\n      \"analysis\": [\n        {\n          \"summary\": \"Resumen analítico exclusivo de la noticia 1.\",\n          \"sources\": [\n            {\n              \"title\": \"Título de la noticia 1\",\n              \"link\": \"URL_DE_LA_NOTICIA_1\",\n              \"source\": \"Medio\"\n            }\n          ]\n        },\n        {\n          \"summary\": \"Resumen analítico exclusivo de la noticia 2 (aunque sea del mismo tema).\",\n          \"sources\": [\n            {\n              \"title\": \"Título de la noticia 2\",\n              \"link\": \"URL_DE_LA_NOTICIA_2\",\n              \"source\": \"Medio\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}\n\nAquí tienes el listado de noticias procesadas para analizar: {{ $json.listaNoticias }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        64,
+        -384
+      ],
+      "id": "1353e493-e9b1-4020-8973-09d1cd279c1b",
+      "name": "Filtrar Relevancia con IA (OpenAI)",
+      "credentials": {
+        "openAiApi": {
+          "id": "lb5kSWPlT0FJxdrS",
+          "name": "marco.a.m.s.84@gmail.com Openia"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a37dc467-c415-44f5-a892-e52e0470bd64",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1232,
+        -224
+      ],
+      "id": "5687d032-4984-4f01-b5db-eccd8013b683",
+      "name": "Filtrar Scraping Exitoso"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Validar URL": {
+      "main": [
+        [
+          {
+            "node": "Extraer Noticias de URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Noticias de URLs": {
+      "main": [
+        [
+          {
+            "node": "Formatear y Filtrar Noticias",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Formatear y Filtrar Noticias": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Relevancia con IA (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Reporte de IA": {
+      "main": [
+        [
+          {
+            "node": "Clear sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear sheet": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Extraer Contenido Completo (Firecrawl)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Contenido Completo (Firecrawl)": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Scraping Exitoso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unificar Reporte (Consolidador)": {
+      "main": [
+        [
+          {
+            "node": "Crear Documento de Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Contenido Web (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Unificar Reporte (Consolidador)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Documento de Reporte": {
+      "main": [
+        [
+          {
+            "node": "Añadir Reporte Final a Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer URLs de Configuración": {
+      "main": [
+        [
+          {
+            "node": "Validar URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gatillar Workflow": {
+      "main": [
+        [
+          {
+            "node": "Leer URLs de Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Relevancia con IA (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Parsear Reporte de IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Scraping Exitoso": {
+      "main": [
+        [
+          {
+            "node": "Procesar Contenido Web (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "35e11149-1fbd-485b-b4e7-6b3c7f21c1c1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "117e6c81e61f5cd557446f6b4f527549b75a9f535021981effd906988b4d50ba"
+  },
+  "id": "7VpFouufRzlm2oz9f0Mrb",
+  "tags": [
+    {
+      "updatedAt": "2026-06-11T23:58:23.134Z",
+      "createdAt": "2026-06-11T23:58:23.134Z",
+      "id": "O1OPciAxU5iiNslf",
+      "name": "scraping"
+    }
+  ]
+}
