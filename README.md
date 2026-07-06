@@ -1,33 +1,35 @@
-# 📰 Automatización de Scraping de Noticias con IA (n8n + OpenAI + Firecrawl)
+# 📰 AI News Scraping Automation (n8n + OpenAI + Firecrawl)
 
-Este repositorio contiene un flujo de trabajo avanzado de n8n diseñado para extraer, filtrar, analizar y consolidar noticias desde feeds RSS utilizando Inteligencia Artificial y Web Scraping profundo.
+This repository contains an advanced n8n workflow designed to extract, filter, analyze, and consolidate news from RSS feeds utilizing Artificial Intelligence and deep Web Scraping.
 
-## 🎯 Objetivo del Proyecto
-Automatizar la vigilancia tecnológica e informativa. El sistema lee un listado de fuentes (URLs), filtra el ruido mediante IA, extrae el texto completo de las noticias relevantes, y genera reportes consolidados listos para consumo humano en Google Docs y Google Sheets.
+## 🎯 Project Objective
 
-## 🏗️ Arquitectura y Tecnologías
-* **Orquestador:** n8n
+To automate technological and informational surveillance. The system reads a list of sources (URLs), filters out noise using AI, extracts the full text of relevant news articles, and generates consolidated reports ready for human consumption in Google Docs and Google Sheets.
+
+## 🏗️ Architecture and Technologies
+
+* **Orchestrator:** n8n
 * **Web Scraping:** Firecrawl API
-* **Procesamiento de Lenguaje Natural (NLP):** OpenAI (GPT-4/GPT-3.5)
-* **Almacenamiento y Reportes:** Google Workspace (Docs & Sheets)
+* **Natural Language Processing (NLP):** OpenAI (GPT-4/GPT-3.5)
+* **Storage and Reporting:** Google Workspace (Docs & Sheets)
 
-## 💡 Características Clave (Nivel Senior)
+## 💡 Key Features (Senior Level)
 
-1. **Diseño Modular y Desacoplado:** Las fuentes de entrada (URLs) se gestionan desde un Google Sheet (`urls_config`), permitiendo a usuarios no técnicos agregar o modificar fuentes sin tocar el código de n8n.
-2. **Optimización de Costos de API:** Implementación de un procesamiento de IA en dos fases. Primero, un filtrado ligero para descartar noticias irrelevantes, y segundo, un procesamiento profundo (resumen y formateo) exclusivo para las noticias validadas.
-3. **Resiliencia y Manejo de Errores (Tolerancia a Fallos):** El nodo de scraping (Firecrawl) está configurado con reintentos automáticos y un enrutamiento condicional (`If Node`). Si una URL falla o da timeout, el error es capturado silenciosamente y descartado, permitiendo que el workflow continúe procesando el resto de las noticias sin interrupciones.
+1. **Modular and Decoupled Design:** Input sources (URLs) are managed from a Google Sheet (`urls_config`), allowing non-technical users to add or modify sources without altering the core n8n workflow.
+2. **API Cost Optimization:** Implements a two-phase AI processing pipeline. First, a lightweight filter discards irrelevant news; second, deep processing (summarization and formatting) is executed exclusively for validated news.
+3. **Resilience and Error Handling (Fault Tolerance):** The scraping node (Firecrawl) is configured with automatic retries and conditional routing (`If Node`). If a URL fails or times out, the error is caught silently and discarded, allowing the workflow to continue processing the remaining pipeline without interruption.
 
-## 📸 Demostración Visual
+## 📸 Visual Demonstration
 
-*Arquitectura del Workflow en n8n:*
-![Workflow de n8n](n8n%20Vista%20previa.png)
+*Workflow Architecture in n8n:*
+![n8n Workflow Preview](image_0af6fd.jpg)
 
-*Resultado Consolidado en Google Docs:*
-![Reporte Google Docs](n8n%20resultado%201.png)
+*Consolidated Output in Google Docs:*
+![Google Docs Report](n8n%20resultado%201.png)
 
-## 🚀 Cómo instalar este workflow
+## 🚀 Installation and Setup
 
-1. Clona este repositorio o descarga el archivo `n8n_ai_news_scraper.json`.
-2. En tu instancia de n8n, ve a **Workflows > Import from File** y selecciona el archivo JSON.
-3. Configura tus credenciales (Ver sección de Credenciales).
-4. Activa el flujo.
+1. Clone this repository or download the `n8n_ai_news_scraper.json` file.
+2. In your n8n instance, navigate to **Workflows > Import from File** and select the JSON file.
+3. Configure your credentials (see the Credentials section).
+4. Activate the workflow.
