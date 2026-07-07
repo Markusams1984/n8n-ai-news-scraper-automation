@@ -1,0 +1,17 @@
+# Archivos ocultos del Sistema Operativo
+.DS_Store
+Thumbs.db
+
+# Configuraciones locales de tu editor de texto
+.vscode/
+
+# Archivos de prueba o descargas temporales del flujo
+*.xlsx
+*.docx
+test_*.json
+temp/
+
+# Archivos de credenciales (por seguridad, en caso de que alguna vez las guardes en texto)
+.env
+*.pem
+*.key
